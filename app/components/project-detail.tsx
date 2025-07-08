@@ -1,541 +1,443 @@
 "use client"
-
 import { useState } from "react"
-import { ArrowLeft, Plus, Calendar, Target, CheckCircle2, Clock, Edit2, Trash2, MoreHorizontal } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import type { Project, Deliverable, Goal } from "../page"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  ArrowLeft,
+  X,
+  Plus,
+  Users,
+  DollarSign,
+  Target,
+  CheckCircle,
+  Clock,
+  AlertTriangle,
+  TrendingUp,
+  Trash2,
+} from "lucide-react"
+import type { Project, Phase, Deliverable, Todo } from "../types/project"
 
 interface ProjectDetailProps {
   project: Project
+  onUpdateProject: (project: Project) => void
+  onDeleteProject: (projectId: string) => void
   onBack: () => void
-  onUpdate: (project: Project) => void
 }
 
-export function ProjectDetail({ project, onBack, onUpdate }: ProjectDetailProps) {
-  const [editingProject, setEditingProject] = useState(false)
-  const [showDeliverableForm, setShowDeliverableForm] = useState(false)
-  const [showGoalForm, setShowGoalForm] = useState(false)
-  const [editingDeliverable, setEditingDeliverable] = useState<Deliverable | null>(null)
-  const [editingGoal, setEditingGoal] = useState<Goal | null>(null)
+export function ProjectDetail({ project, onUpdateProject, onDeleteProject, onBack }: ProjectDetailProps) {
+  const [editingPhase, setEditingPhase] = useState<string | null>(null)
+  const [editingDeliverable, setEditingDeliverable] = useState<string | null>(null)
+  const [newTodo, setNewTodo] = useState("")
+  const [newTodoPriority, setNewTodoPriority] = useState<"low" | "medium" | "high">("medium")
 
-  const [projectForm, setProjectForm] = useState({
-    name: project.name,
-    client: project.client,
-    startDate: project.startDate,
-    endDate: project.endDate,
-    description: project.description,
-    status: project.status,
-    progress: project.progress,
-  })
-
-  const [deliverableForm, setDeliverableForm] = useState({
-    title: "",
-    dueDate: "",
-  })
-
-  const [goalForm, setGoalForm] = useState({
-    title: "",
-  })
-
-  const getStatusColor = (status: Project["status"]) => {
+  const getStatusIcon = (status: string) => {
     switch (status) {
-      case "Planning":
-        return "bg-slate-100 text-slate-700 border-slate-200"
-      case "In Progress":
-        return "bg-blue-100 text-blue-700 border-blue-200"
-      case "Review":
-        return "bg-amber-100 text-amber-700 border-amber-200"
-      case "Completed":
-        return "bg-emerald-100 text-emerald-700 border-emerald-200"
+      case "completed":
+        return <CheckCircle className="w-4 h-4 text-white" />
+      case "in-progress":
+        return <TrendingUp className="w-4 h-4 text-white" />
+      case "blocked":
+        return <AlertTriangle className="w-4 h-4 text-white" />
+      case "pending":
+        return <Clock className="w-4 h-4 text-gray-400" />
+      default:
+        return <Clock className="w-4 h-4 text-gray-400" />
     }
   }
 
-  const handleProjectUpdate = () => {
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "completed":
+        return "bg-white text-black"
+      case "in-progress":
+        return "bg-gray-700 text-white border border-gray-500"
+      case "blocked":
+        return "bg-gray-800 text-white border border-gray-600"
+      case "pending":
+        return "bg-gray-900 text-gray-400 border border-gray-700"
+      default:
+        return "bg-gray-800 text-white border border-gray-600"
+    }
+  }
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case "critical":
+        return "bg-white text-black"
+      case "high":
+        return "bg-gray-700 text-white border border-gray-500"
+      case "medium":
+        return "bg-gray-800 text-gray-300 border border-gray-600"
+      case "low":
+        return "bg-gray-900 text-gray-500 border border-gray-700"
+      default:
+        return "bg-gray-800 text-white border border-gray-600"
+    }
+  }
+
+  const updatePhaseStatus = (phaseId: string, status: Phase["status"]) => {
     const updatedProject = {
       ...project,
-      ...projectForm,
+      phases: project.phases.map((phase) => (phase.id === phaseId ? { ...phase, status } : phase)),
     }
-    onUpdate(updatedProject)
-    setEditingProject(false)
+    onUpdateProject(updatedProject)
   }
 
-  const handleDeliverableSubmit = () => {
-    if (editingDeliverable) {
-      const updatedDeliverables = project.deliverables.map((d) =>
-        d.id === editingDeliverable.id ? { ...d, title: deliverableForm.title, dueDate: deliverableForm.dueDate } : d,
-      )
-      onUpdate({ ...project, deliverables: updatedDeliverables })
-      setEditingDeliverable(null)
-    } else {
-      const newDeliverable: Deliverable = {
+  const updateDeliverableStatus = (phaseId: string, deliverableId: string, status: Deliverable["status"]) => {
+    const updatedProject = {
+      ...project,
+      phases: project.phases.map((phase) =>
+        phase.id === phaseId
+          ? {
+              ...phase,
+              deliverables: phase.deliverables.map((deliverable) =>
+                deliverable.id === deliverableId ? { ...deliverable, status } : deliverable,
+              ),
+            }
+          : phase,
+      ),
+    }
+    onUpdateProject(updatedProject)
+  }
+
+  const addTodo = () => {
+    if (newTodo.trim()) {
+      const todo: Todo = {
         id: Date.now().toString(),
-        title: deliverableForm.title,
-        dueDate: deliverableForm.dueDate,
-        status: "Pending",
+        text: newTodo,
+        completed: false,
+        priority: newTodoPriority,
       }
-      onUpdate({ ...project, deliverables: [...project.deliverables, newDeliverable] })
-    }
-    setDeliverableForm({ title: "", dueDate: "" })
-    setShowDeliverableForm(false)
-  }
-
-  const handleGoalSubmit = () => {
-    if (editingGoal) {
-      const updatedGoals = project.goals.map((g) => (g.id === editingGoal.id ? { ...g, title: goalForm.title } : g))
-      onUpdate({ ...project, goals: updatedGoals })
-      setEditingGoal(null)
-    } else {
-      const newGoal: Goal = {
-        id: Date.now().toString(),
-        title: goalForm.title,
-        achieved: false,
+      const updatedProject = {
+        ...project,
+        todos: [...project.todos, todo],
       }
-      onUpdate({ ...project, goals: [...project.goals, newGoal] })
+      onUpdateProject(updatedProject)
+      setNewTodo("")
     }
-    setGoalForm({ title: "" })
-    setShowGoalForm(false)
   }
 
-  const toggleDeliverableStatus = (deliverableId: string) => {
-    const updatedDeliverables = project.deliverables.map((d) =>
-      d.id === deliverableId ? { ...d, status: d.status === "Complete" ? "Pending" : ("Complete" as const) } : d,
-    )
-    onUpdate({ ...project, deliverables: updatedDeliverables })
+  const toggleTodo = (todoId: string) => {
+    const updatedProject = {
+      ...project,
+      todos: project.todos.map((todo) => (todo.id === todoId ? { ...todo, completed: !todo.completed } : todo)),
+    }
+    onUpdateProject(updatedProject)
   }
 
-  const toggleGoalAchievement = (goalId: string) => {
-    const updatedGoals = project.goals.map((g) => (g.id === goalId ? { ...g, achieved: !g.achieved } : g))
-    onUpdate({ ...project, goals: updatedGoals })
+  const deleteTodo = (todoId: string) => {
+    const updatedProject = {
+      ...project,
+      todos: project.todos.filter((todo) => todo.id !== todoId),
+    }
+    onUpdateProject(updatedProject)
   }
 
-  const deleteDeliverable = (deliverableId: string) => {
-    const updatedDeliverables = project.deliverables.filter((d) => d.id !== deliverableId)
-    onUpdate({ ...project, deliverables: updatedDeliverables })
-  }
-
-  const deleteGoal = (goalId: string) => {
-    const updatedGoals = project.goals.filter((g) => g.id !== goalId)
-    onUpdate({ ...project, goals: updatedGoals })
-  }
-
-  const startEditDeliverable = (deliverable: Deliverable) => {
-    setEditingDeliverable(deliverable)
-    setDeliverableForm({ title: deliverable.title, dueDate: deliverable.dueDate })
-    setShowDeliverableForm(true)
-  }
-
-  const startEditGoal = (goal: Goal) => {
-    setEditingGoal(goal)
-    setGoalForm({ title: goal.title })
-    setShowGoalForm(true)
-  }
+  // Calculate project statistics
+  const totalDeliverables = project.phases.reduce((sum, phase) => sum + phase.deliverables.length, 0)
+  const completedDeliverables = project.phases.reduce(
+    (sum, phase) => sum + phase.deliverables.filter((d) => d.status === "completed").length,
+    0,
+  )
+  const completedTodos = project.todos.filter((todo) => todo.completed).length
+  const budgetUsed = (project.spent / project.budget) * 100
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+    <div className="min-h-screen bg-black text-white p-6 font-mono">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center">
-            <Button variant="ghost" onClick={onBack} className="mr-4 p-2 hover:bg-slate-100">
-              <ArrowLeft className="w-5 h-5" />
+            <Button variant="ghost" onClick={onBack} className="mr-4 text-gray-400 hover:text-white">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              BACK
             </Button>
             <div>
-              <h1 className="text-3xl font-light text-slate-900 mb-2">{project.name}</h1>
-              <p className="text-slate-600">{project.client}</p>
+              <h1 className="text-3xl font-bold mb-2">{project.name}</h1>
+              <p className="text-gray-400">{project.description}</p>
             </div>
           </div>
           <Button
-            onClick={() => setEditingProject(true)}
-            variant="outline"
-            className="border-slate-200 text-slate-600 hover:bg-slate-50"
+            onClick={() => onDeleteProject(project.id)}
+            className="bg-gray-800 text-white hover:bg-gray-700 font-mono"
           >
-            <Edit2 className="w-4 h-4 mr-2" />
-            Edit Project
+            <Trash2 className="w-4 h-4 mr-2" />
+            DELETE
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* Project Overview */}
-            <Card className="border-0 shadow-sm">
+        <div className="bg-gray-900 border border-gray-700 p-3 font-mono text-sm">
+          <span className="text-white">{">"}</span> PROJECT: {project.name.toUpperCase()} | STATUS:{" "}
+          {project.status.toUpperCase()} | PROGRESS: {project.progress}% | BUDGET: ${project.spent.toLocaleString()}/$
+          {project.budget.toLocaleString()}
+        </div>
+      </div>
+
+      {/* Project Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <Card className="bg-black border-gray-700">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-400">PROGRESS</CardTitle>
+            <Target className="h-4 w-4 text-gray-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-white mb-2">{project.progress}%</div>
+            <Progress value={project.progress} className="h-2" />
+          </CardContent>
+        </Card>
+
+        <Card className="bg-black border-gray-700">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-400">DELIVERABLES</CardTitle>
+            <CheckCircle className="h-4 w-4 text-gray-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-white">
+              {completedDeliverables}/{totalDeliverables}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              {Math.round((completedDeliverables / totalDeliverables) * 100) || 0}% complete
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-black border-gray-700">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-400">BUDGET</CardTitle>
+            <DollarSign className="h-4 w-4 text-gray-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-white">{Math.round(budgetUsed)}%</div>
+            <p className="text-xs text-gray-500 mt-1">${project.spent.toLocaleString()} spent</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-black border-gray-700">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-400">TEAM</CardTitle>
+            <Users className="h-4 w-4 text-gray-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-white">{project.team.length}</div>
+            <p className="text-xs text-gray-500 mt-1">Active members</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Content Tabs */}
+      <Tabs defaultValue="phases" className="space-y-6">
+        <TabsList className="bg-gray-900 border border-gray-700">
+          <TabsTrigger value="phases" className="font-mono">
+            PHASES
+          </TabsTrigger>
+          <TabsTrigger value="team" className="font-mono">
+            TEAM
+          </TabsTrigger>
+          <TabsTrigger value="todos" className="font-mono">
+            TODOS
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Phases Tab */}
+        <TabsContent value="phases" className="space-y-6">
+          {project.phases.map((phase) => (
+            <Card key={phase.id} className="bg-black border-gray-700">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-xl font-medium text-slate-900">Project Overview</CardTitle>
-                  <Badge className={`${getStatusColor(project.status)} text-sm font-medium`}>{project.status}</Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-slate-600 mb-6">{project.description}</p>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                  <div className="flex items-center text-sm text-slate-600">
-                    <Calendar className="w-4 h-4 mr-2" />
-                    <span>Start: {new Date(project.startDate).toLocaleDateString()}</span>
+                  <div className="flex items-center gap-3">
+                    <CardTitle className="text-white font-mono">{phase.name}</CardTitle>
+                    <Badge className={`${getStatusColor(phase.status)} font-mono text-xs`}>
+                      {getStatusIcon(phase.status)}
+                      <span className="ml-1">{phase.status.toUpperCase()}</span>
+                    </Badge>
                   </div>
-                  <div className="flex items-center text-sm text-slate-600">
-                    <Calendar className="w-4 h-4 mr-2" />
-                    <span>End: {new Date(project.endDate).toLocaleDateString()}</span>
-                  </div>
+                  <Select
+                    value={phase.status}
+                    onValueChange={(value: Phase["status"]) => updatePhaseStatus(phase.id, value)}
+                  >
+                    <SelectTrigger className="w-40 bg-black border-gray-700 text-white font-mono">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-black border-gray-700">
+                      <SelectItem value="pending">PENDING</SelectItem>
+                      <SelectItem value="in-progress">IN PROGRESS</SelectItem>
+                      <SelectItem value="completed">COMPLETED</SelectItem>
+                      <SelectItem value="blocked">BLOCKED</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-
-                <div className="mb-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-slate-700">Overall Progress</span>
-                    <span className="text-sm text-slate-600">{project.progress}%</span>
-                  </div>
-                  <Progress value={project.progress} className="h-3" />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Deliverables */}
-            <Card className="border-0 shadow-sm">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-xl font-medium text-slate-900">Deliverables</CardTitle>
-                  <Dialog open={showDeliverableForm} onOpenChange={setShowDeliverableForm}>
-                    <DialogTrigger asChild>
-                      <Button size="sm" className="bg-slate-900 hover:bg-slate-800 text-white">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add Deliverable
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>{editingDeliverable ? "Edit Deliverable" : "Add New Deliverable"}</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div>
-                          <Label htmlFor="deliverable-title">Title</Label>
-                          <Input
-                            id="deliverable-title"
-                            value={deliverableForm.title}
-                            onChange={(e) => setDeliverableForm((prev) => ({ ...prev, title: e.target.value }))}
-                            placeholder="Enter deliverable title"
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="deliverable-date">Due Date</Label>
-                          <Input
-                            id="deliverable-date"
-                            type="date"
-                            value={deliverableForm.dueDate}
-                            onChange={(e) => setDeliverableForm((prev) => ({ ...prev, dueDate: e.target.value }))}
-                          />
-                        </div>
-                        <div className="flex justify-end space-x-2">
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              setShowDeliverableForm(false)
-                              setEditingDeliverable(null)
-                              setDeliverableForm({ title: "", dueDate: "" })
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                          <Button onClick={handleDeliverableSubmit}>
-                            {editingDeliverable ? "Update" : "Add"} Deliverable
-                          </Button>
-                        </div>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {project.deliverables.map((deliverable) => (
-                    <div key={deliverable.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <Checkbox
-                          checked={deliverable.status === "Complete"}
-                          onCheckedChange={() => toggleDeliverableStatus(deliverable.id)}
-                        />
-                        <div>
-                          <p
-                            className={`font-medium ${deliverable.status === "Complete" ? "line-through text-slate-500" : "text-slate-900"}`}
-                          >
-                            {deliverable.title}
-                          </p>
-                          <p className="text-sm text-slate-600">
-                            Due: {new Date(deliverable.dueDate).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreHorizontal className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                          <DropdownMenuItem onClick={() => startEditDeliverable(deliverable)}>
-                            <Edit2 className="w-4 h-4 mr-2" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => deleteDeliverable(deliverable.id)} className="text-red-600">
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  ))}
-                  {project.deliverables.length === 0 && (
-                    <p className="text-slate-500 text-center py-8">No deliverables added yet</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Goals */}
-            <Card className="border-0 shadow-sm">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-xl font-medium text-slate-900">Project Goals</CardTitle>
-                  <Dialog open={showGoalForm} onOpenChange={setShowGoalForm}>
-                    <DialogTrigger asChild>
-                      <Button size="sm" className="bg-slate-900 hover:bg-slate-800 text-white">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add Goal
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>{editingGoal ? "Edit Goal" : "Add New Goal"}</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div>
-                          <Label htmlFor="goal-title">Goal</Label>
-                          <Input
-                            id="goal-title"
-                            value={goalForm.title}
-                            onChange={(e) => setGoalForm((prev) => ({ ...prev, title: e.target.value }))}
-                            placeholder="Enter project goal"
-                          />
-                        </div>
-                        <div className="flex justify-end space-x-2">
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              setShowGoalForm(false)
-                              setEditingGoal(null)
-                              setGoalForm({ title: "" })
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                          <Button onClick={handleGoalSubmit}>{editingGoal ? "Update" : "Add"} Goal</Button>
-                        </div>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {project.goals.map((goal) => (
-                    <div key={goal.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <Checkbox checked={goal.achieved} onCheckedChange={() => toggleGoalAchievement(goal.id)} />
-                        <p
-                          className={`font-medium ${goal.achieved ? "line-through text-slate-500" : "text-slate-900"}`}
-                        >
-                          {goal.title}
-                        </p>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreHorizontal className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                          <DropdownMenuItem onClick={() => startEditGoal(goal)}>
-                            <Edit2 className="w-4 h-4 mr-2" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => deleteGoal(goal.id)} className="text-red-600">
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  ))}
-                  {project.goals.length === 0 && (
-                    <p className="text-slate-500 text-center py-8">No goals defined yet</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Quick Stats */}
-            <Card className="border-0 shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg font-medium text-slate-900">Quick Stats</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-600" />
-                    <span className="text-sm text-slate-600">Deliverables</span>
-                  </div>
-                  <span className="text-sm font-medium text-slate-900">
-                    {project.deliverables.filter((d) => d.status === "Complete").length}/{project.deliverables.length}
+                <p className="text-gray-400 text-sm">{phase.description}</p>
+                <div className="flex items-center gap-4 text-sm text-gray-500">
+                  <span>
+                    {phase.startDate} → {phase.endDate}
                   </span>
+                  <span>Progress: {phase.progress}%</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <Target className="w-4 h-4 mr-2 text-blue-600" />
-                    <span className="text-sm text-slate-600">Goals</span>
-                  </div>
-                  <span className="text-sm font-medium text-slate-900">
-                    {project.goals.filter((g) => g.achieved).length}/{project.goals.length}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <Clock className="w-4 h-4 mr-2 text-amber-600" />
-                    <span className="text-sm text-slate-600">Days Remaining</span>
-                  </div>
-                  <span className="text-sm font-medium text-slate-900">
-                    {Math.max(
-                      0,
-                      Math.ceil((new Date(project.endDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)),
-                    )}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Update Progress */}
-            <Card className="border-0 shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg font-medium text-slate-900">Update Progress</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="progress">Progress ({projectForm.progress}%)</Label>
-                    <input
-                      id="progress"
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={projectForm.progress}
-                      onChange={(e) =>
-                        setProjectForm((prev) => ({ ...prev, progress: Number.parseInt(e.target.value) }))
-                      }
-                      className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer slider"
-                    />
+                    <h4 className="text-white font-mono mb-3">DELIVERABLES</h4>
+                    <div className="space-y-2">
+                      {phase.deliverables.map((deliverable) => (
+                        <div
+                          key={deliverable.id}
+                          className="flex items-center justify-between p-3 border border-gray-800 rounded"
+                        >
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-white font-mono">{deliverable.name}</span>
+                              <Badge className={`${getStatusColor(deliverable.status)} font-mono text-xs`}>
+                                {deliverable.status.toUpperCase()}
+                              </Badge>
+                              <Badge className={`${getPriorityColor(deliverable.priority)} font-mono text-xs`}>
+                                {deliverable.priority.toUpperCase()}
+                              </Badge>
+                            </div>
+                            <p className="text-gray-400 text-sm">{deliverable.description}</p>
+                            <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
+                              <span>Due: {deliverable.dueDate}</span>
+                              <span>Assignee: {deliverable.assignee}</span>
+                            </div>
+                          </div>
+                          <Select
+                            value={deliverable.status}
+                            onValueChange={(value: Deliverable["status"]) =>
+                              updateDeliverableStatus(phase.id, deliverable.id, value)
+                            }
+                          >
+                            <SelectTrigger className="w-32 bg-black border-gray-700 text-white font-mono">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-black border-gray-700">
+                              <SelectItem value="pending">PENDING</SelectItem>
+                              <SelectItem value="in-progress">IN PROGRESS</SelectItem>
+                              <SelectItem value="completed">COMPLETED</SelectItem>
+                              <SelectItem value="blocked">BLOCKED</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div>
-                    <Label htmlFor="status-update">Status</Label>
-                    <Select
-                      value={projectForm.status}
-                      onValueChange={(value) =>
-                        setProjectForm((prev) => ({ ...prev, status: value as Project["status"] }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Planning">Planning</SelectItem>
-                        <SelectItem value="In Progress">In Progress</SelectItem>
-                        <SelectItem value="Review">Review</SelectItem>
-                        <SelectItem value="Completed">Completed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button onClick={handleProjectUpdate} className="w-full bg-slate-900 hover:bg-slate-800 text-white">
-                    Update Project
-                  </Button>
                 </div>
               </CardContent>
             </Card>
-          </div>
-        </div>
+          ))}
+        </TabsContent>
 
-        {/* Edit Project Dialog */}
-        <Dialog open={editingProject} onOpenChange={setEditingProject}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Edit Project</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="edit-name">Project Name</Label>
-                  <Input
-                    id="edit-name"
-                    value={projectForm.name}
-                    onChange={(e) => setProjectForm((prev) => ({ ...prev, name: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="edit-client">Client</Label>
-                  <Input
-                    id="edit-client"
-                    value={projectForm.client}
-                    onChange={(e) => setProjectForm((prev) => ({ ...prev, client: e.target.value }))}
-                  />
-                </div>
+        {/* Team Tab */}
+        <TabsContent value="team" className="space-y-6">
+          <Card className="bg-black border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-white font-mono">TEAM MEMBERS</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {project.team.map((member) => (
+                  <div key={member.id} className="p-4 border border-gray-800 rounded">
+                    <div className="text-white font-mono font-bold mb-1">{member.name}</div>
+                    <div className="text-gray-400 text-sm mb-2">{member.role}</div>
+                    <div className="text-gray-500 text-xs font-mono">{member.email}</div>
+                  </div>
+                ))}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="edit-start">Start Date</Label>
-                  <Input
-                    id="edit-start"
-                    type="date"
-                    value={projectForm.startDate}
-                    onChange={(e) => setProjectForm((prev) => ({ ...prev, startDate: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="edit-end">End Date</Label>
-                  <Input
-                    id="edit-end"
-                    type="date"
-                    value={projectForm.endDate}
-                    onChange={(e) => setProjectForm((prev) => ({ ...prev, endDate: e.target.value }))}
-                  />
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="edit-description">Description</Label>
-                <Textarea
-                  id="edit-description"
-                  value={projectForm.description}
-                  onChange={(e) => setProjectForm((prev) => ({ ...prev, description: e.target.value }))}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Todos Tab */}
+        <TabsContent value="todos" className="space-y-6">
+          <Card className="bg-black border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-white font-mono">PROJECT TODOS</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Add Todo Form */}
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Add new todo..."
+                  value={newTodo}
+                  onChange={(e) => setNewTodo(e.target.value)}
+                  className="bg-black border-gray-700 text-white font-mono flex-1"
+                  onKeyPress={(e) => e.key === "Enter" && addTodo()}
                 />
-              </div>
-              <div className="flex justify-end space-x-2">
-                <Button variant="outline" onClick={() => setEditingProject(false)}>
-                  Cancel
+                <Select value={newTodoPriority} onValueChange={(value: any) => setNewTodoPriority(value)}>
+                  <SelectTrigger className="w-32 bg-black border-gray-700 text-white font-mono">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-black border-gray-700">
+                    <SelectItem value="low">LOW</SelectItem>
+                    <SelectItem value="medium">MEDIUM</SelectItem>
+                    <SelectItem value="high">HIGH</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button onClick={addTodo} className="bg-white text-black hover:bg-gray-200 font-mono">
+                  <Plus className="w-4 h-4" />
                 </Button>
-                <Button onClick={handleProjectUpdate}>Save Changes</Button>
               </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+
+              {/* Todos List */}
+              <div className="space-y-2">
+                {project.todos.map((todo) => (
+                  <div key={todo.id} className="flex items-center gap-3 p-3 border border-gray-800 rounded">
+                    <Checkbox
+                      checked={todo.completed}
+                      onCheckedChange={() => toggleTodo(todo.id)}
+                      className="border-gray-600"
+                    />
+                    <div className="flex-1">
+                      <span className={`font-mono ${todo.completed ? "line-through text-gray-500" : "text-white"}`}>
+                        {todo.text}
+                      </span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge className={`${getPriorityColor(todo.priority)} font-mono text-xs`}>
+                          {todo.priority.toUpperCase()}
+                        </Badge>
+                        {todo.dueDate && <span className="text-gray-500 text-xs font-mono">Due: {todo.dueDate}</span>}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deleteTodo(todo.id)}
+                      className="text-gray-400 hover:text-white"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+
+                {project.todos.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <p className="font-mono">NO TODOS FOUND</p>
+                    <p className="text-sm">Add a todo to get started</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Todo Statistics */}
+              <div className="border-t border-gray-800 pt-4">
+                <div className="flex justify-between text-sm font-mono">
+                  <span className="text-gray-400">
+                    COMPLETED: {completedTodos}/{project.todos.length}
+                  </span>
+                  <span className="text-gray-400">
+                    PROGRESS: {project.todos.length > 0 ? Math.round((completedTodos / project.todos.length) * 100) : 0}
+                    %
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

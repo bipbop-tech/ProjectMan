@@ -1,36 +1,54 @@
-export interface Todo {
+export interface Project {
   id: string
-  text: string
-  completed: boolean
-}
-
-export interface Deliverable {
-  id: string
-  title: string
-  notes: string
-  links: string[]
-  files: string[]
+  name: string
+  description: string
+  status: "planning" | "active" | "completed" | "on-hold"
+  priority: "low" | "medium" | "high" | "critical"
+  startDate: string
+  endDate: string
+  progress: number
+  phases: Phase[]
+  team: TeamMember[]
+  budget: number
+  spent: number
+  image?: string
+  todos: Todo[]
 }
 
 export interface Phase {
   id: string
-  title: string
+  name: string
   description: string
-  status: "pending" | "in-progress" | "completed"
+  status: "pending" | "in-progress" | "completed" | "blocked"
+  startDate: string
+  endDate: string
   progress: number
-  todos: Todo[]
   deliverables: Deliverable[]
+  dependencies: string[]
 }
 
-export interface Project {
+export interface Deliverable {
   id: string
   name: string
-  details: string
-  image: string
-  generalNotes: string
-  createdAt: string
-  status: "active" | "completed" | "on-hold"
-  currentPhase: number
-  overallProgress: number
-  roadmap: Phase[]
+  description: string
+  status: "pending" | "in-progress" | "completed" | "blocked"
+  dueDate: string
+  assignee: string
+  priority: "low" | "medium" | "high" | "critical"
+}
+
+export interface TeamMember {
+  id: string
+  name: string
+  role: string
+  email: string
+  avatar?: string
+}
+
+export interface Todo {
+  id: string
+  text: string
+  completed: boolean
+  priority: "low" | "medium" | "high"
+  dueDate?: string
 }
