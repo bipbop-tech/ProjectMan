@@ -1,36 +1,108 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  Plus,
-  Search,
-  BarChart3,
-  Users,
-  Calendar,
-  DollarSign,
-  TrendingUp,
-  CheckCircle,
-  Clock,
-  Pause,
-} from "lucide-react"
-import type { Project } from "../types/project"
+import { Plus, X, Clock } from "lucide-react"
+import type { Project, GeneralTodo, Activity } from "../types/project"
 
 interface ProjectDashboardProps {
   projects: Project[]
-  onCreateProject: () => void
-  onViewProject: (project: Project) => void
+  generalTodos: GeneralTodo[]
+  activities: Activity[]
+  onSelectProject: (project: Project) => void
+  onDeleteProject: (projectId: string) => void
+  onUpdateGeneralTodos: (todos: GeneralTodo[]) => void
 }
 
-export function ProjectDashboard({ projects = [], onCreateProject, onViewProject }: ProjectDashboardProps) {
+const formatDate = (date: Date | string | null | undefined): string => {
+  if (!date) return "N/A"
+
+  try {
+    const dateObj = typeof date === "string" ? new Date(date) : date
+    if (isNaN(dateObj.getTime())) return "N/A"
+
+    return dateObj.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
+  } catch {
+    return "N/A"
+  }
+}
+
+const getStatusSymbol = (status: string) => {
+  switch (status) {
+    case "planning":
+      return "○"
+    case "active":
+      return "→"
+    case "hold":
+      return "⏸"
+    case "completed":
+      return "✓"
+    default:
+      return "○"
+  }
+}
+
+const getPrioritySymbol = (priority: string) => {
+  switch (priority) {
+    case "low":
+      return "▼"
+    case "medium":
+      return "■"
+    case "high":
+      return "▲"
+    default:
+      return "■"
+  }
+}
+
+const getActivityIcon = (type: string) => {
+  switch (type) {
+    case "project_created":
+      return "+"
+    case "project_updated":
+      return "~"
+    case "phase_completed":
+      return "✓"
+    case "deliverable_completed":
+      return "📦"
+    case "todo_completed":
+      return "☑"
+    default:
+      return "•"
+  }
+}
+
+const formatTimestamp = (timestamp: Date): string => {
+  const now = new Date()
+  const diff = now.getTime() - timestamp.getTime()
+  const minutes = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days = Math.floor(diff / 86400000)
+
+  if (minutes < 60) return `${minutes}m ago`
+  if (hours < 24) return `${hours}h ago`
+  return `${days}d ago`
+}
+
+export function ProjectDashboard({
+  projects = [],
+  generalTodos = [],
+  activities = [],
+  onSelectProject,
+  onDeleteProject,
+  onUpdateGeneralTodos,
+}: ProjectDashboardProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [priorityFilter, setPriorityFilter] = useState<string>("all")
+  const [newTodo, setNewTodo] = useState("")
+  const [newTodoPriority, setNewTodoPriority] = useState<"low" | "medium" | "high">("medium")
 
   const filteredProjects = projects.filter((project) => {
     const matchesSearch =
@@ -42,59 +114,36 @@ export function ProjectDashboard({ projects = [], onCreateProject, onViewProject
     return matchesSearch && matchesStatus && matchesPriority
   })
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "completed":
-        return <CheckCircle className="w-4 h-4" />
-      case "active":
-        return <TrendingUp className="w-4 h-4" />
-      case "on-hold":
-        return <Pause className="w-4 h-4" />
-      case "planning":
-        return <Clock className="w-4 h-4" />
-      default:
-        return <Clock className="w-4 h-4" />
+  const addGeneralTodo = () => {
+    if (newTodo.trim()) {
+      const todo: GeneralTodo = {
+        id: Date.now().toString(),
+        text: newTodo.trim(),
+        completed: false,
+        priority: newTodoPriority,
+      }
+      onUpdateGeneralTodos([...generalTodos, todo])
+      setNewTodo("")
     }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "bg-white text-black"
-      case "active":
-        return "bg-gray-800 text-white border border-gray-600"
-      case "on-hold":
-        return "bg-gray-900 text-gray-400 border border-gray-700"
-      case "planning":
-        return "bg-gray-800 text-gray-300 border border-gray-600"
-      default:
-        return "bg-gray-800 text-white border border-gray-600"
-    }
+  const toggleGeneralTodo = (todoId: string) => {
+    const updatedTodos = generalTodos.map((todo) =>
+      todo.id === todoId ? { ...todo, completed: !todo.completed } : todo,
+    )
+    onUpdateGeneralTodos(updatedTodos)
   }
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "critical":
-        return "bg-white text-black"
-      case "high":
-        return "bg-gray-700 text-white border border-gray-500"
-      case "medium":
-        return "bg-gray-800 text-gray-300 border border-gray-600"
-      case "low":
-        return "bg-gray-900 text-gray-500 border border-gray-700"
-      default:
-        return "bg-gray-800 text-white border border-gray-600"
-    }
+  const deleteGeneralTodo = (todoId: string) => {
+    const updatedTodos = generalTodos.filter((todo) => todo.id !== todoId)
+    onUpdateGeneralTodos(updatedTodos)
   }
 
-  // Calculate dashboard statistics
   const totalProjects = projects.length
   const activeProjects = projects.filter((p) => p.status === "active").length
   const completedProjects = projects.filter((p) => p.status === "completed").length
-  const totalBudget = projects.reduce((sum, p) => sum + p.budget, 0)
-  const totalSpent = projects.reduce((sum, p) => sum + p.spent, 0)
   const averageProgress =
-    projects.length > 0 ? Math.round(projects.reduce((sum, p) => sum + p.progress, 0) / projects.length) : 0
+    totalProjects > 0 ? Math.round(projects.reduce((sum, p) => sum + p.progress, 0) / totalProjects) : 0
 
   return (
     <div className="min-h-screen bg-black text-white p-6 font-mono">
@@ -105,7 +154,10 @@ export function ProjectDashboard({ projects = [], onCreateProject, onViewProject
             <h1 className="text-3xl font-bold mb-2">PROJECT ATLAS</h1>
             <p className="text-gray-400">Terminal Management System v2.1.0</p>
           </div>
-          <Button onClick={onCreateProject} className="bg-white text-black hover:bg-gray-200 font-mono">
+          <Button
+            onClick={() => onSelectProject({} as Project)}
+            className="bg-white text-black hover:bg-gray-200 font-mono"
+          >
             <Plus className="w-4 h-4 mr-2" />
             NEW PROJECT
           </Button>
@@ -119,58 +171,29 @@ export function ProjectDashboard({ projects = [], onCreateProject, onViewProject
       </div>
 
       {/* Dashboard Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <Card className="bg-black border-gray-700">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-400">TOTAL PROJECTS</CardTitle>
-            <BarChart3 className="h-4 w-4 text-gray-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">{totalProjects}</div>
-            <p className="text-xs text-gray-500 mt-1">
-              {activeProjects} active, {completedProjects} completed
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-black border-gray-700">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-400">TEAM MEMBERS</CardTitle>
-            <Users className="h-4 w-4 text-gray-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">{projects.reduce((sum, p) => sum + p.team.length, 0)}</div>
-            <p className="text-xs text-gray-500 mt-1">Across all projects</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-black border-gray-700">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-400">BUDGET STATUS</CardTitle>
-            <DollarSign className="h-4 w-4 text-gray-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">${totalSpent.toLocaleString()}</div>
-            <p className="text-xs text-gray-500 mt-1">of ${totalBudget.toLocaleString()} total</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-black border-gray-700">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-400">AVG PROGRESS</CardTitle>
-            <TrendingUp className="h-4 w-4 text-gray-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">{averageProgress}%</div>
-            <Progress value={averageProgress} className="mt-2 h-2" />
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="card-terminal text-center p-4">
+          <div className="text-2xl font-bold terminal-text">{totalProjects}</div>
+          <div className="text-sm text-muted-foreground">TOTAL PROJECTS</div>
+        </div>
+        <div className="card-terminal text-center p-4">
+          <div className="text-2xl font-bold text-white">{activeProjects}</div>
+          <div className="text-sm text-muted-foreground">ACTIVE</div>
+        </div>
+        <div className="card-terminal text-center p-4">
+          <div className="text-2xl font-bold terminal-text">{completedProjects}</div>
+          <div className="text-sm text-muted-foreground">COMPLETED</div>
+        </div>
+        <div className="card-terminal text-center p-4">
+          <div className="text-2xl font-bold text-white">{averageProgress}%</div>
+          <div className="text-sm text-muted-foreground">AVG PROGRESS</div>
+        </div>
       </div>
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
           <Input
             placeholder="Search projects..."
             value={searchTerm}
@@ -188,7 +211,7 @@ export function ProjectDashboard({ projects = [], onCreateProject, onViewProject
             <SelectItem value="planning">Planning</SelectItem>
             <SelectItem value="active">Active</SelectItem>
             <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="on-hold">On Hold</SelectItem>
+            <SelectItem value="hold">On Hold</SelectItem>
           </SelectContent>
         </Select>
 
@@ -207,89 +230,194 @@ export function ProjectDashboard({ projects = [], onCreateProject, onViewProject
       </div>
 
       {/* Projects Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {filteredProjects.map((project) => (
-          <Card
-            key={project.id}
-            className="bg-black border-gray-700 hover:border-gray-500 transition-colors cursor-pointer"
-            onClick={() => onViewProject(project)}
-          >
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <CardTitle className="text-lg font-bold text-white mb-2 font-mono">{project.name}</CardTitle>
-                  <p className="text-sm text-gray-400 mb-3 line-clamp-2">{project.description}</p>
-                </div>
-              </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Projects List */}
+        <div className="lg:col-span-2">
+          <div className="card-terminal p-6">
+            <h2 className="text-xl font-bold terminal-text mb-4">PROJECT_LIST</h2>
 
-              <div className="flex items-center gap-2 mb-3">
-                <Badge className={`${getStatusColor(project.status)} font-mono text-xs`}>
-                  {getStatusIcon(project.status)}
-                  <span className="ml-1">{project.status.toUpperCase()}</span>
-                </Badge>
-                <Badge className={`${getPriorityColor(project.priority)} font-mono text-xs`}>
-                  {project.priority.toUpperCase()}
-                </Badge>
+            {filteredProjects.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <div className="text-4xl mb-4">○</div>
+                <div>NO PROJECTS FOUND</div>
+                <div className="text-sm mt-2">CREATE YOUR FIRST PROJECT TO GET STARTED</div>
               </div>
-            </CardHeader>
-
-            <CardContent>
+            ) : (
               <div className="space-y-4">
-                <div>
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="text-gray-400">Progress</span>
-                    <span className="text-white font-mono">{project.progress}%</span>
-                  </div>
-                  <Progress value={project.progress} className="h-2" />
-                </div>
+                {filteredProjects.map((project) => (
+                  <div key={project.id} className="border border-border p-4 hover:border-primary transition-colors">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        {project.image && (
+                          <img
+                            src={project.image || "/placeholder.svg"}
+                            alt={project.name}
+                            className="w-12 h-12 object-cover border border-border"
+                          />
+                        )}
+                        <div>
+                          <h3 className="font-bold terminal-text text-lg">{project.name}</h3>
+                          <p className="text-sm text-muted-foreground">{project.description}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`status-symbol status-${project.status}`}>
+                          {getStatusSymbol(project.status)}
+                        </span>
+                        <span className={`status-symbol priority-${project.priority}`}>
+                          {getPrioritySymbol(project.priority)}
+                        </span>
+                      </div>
+                    </div>
 
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-400 block">Budget</span>
-                    <span className="text-white font-mono">${project.budget.toLocaleString()}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400 block">Spent</span>
-                    <span className="text-white font-mono">${project.spent.toLocaleString()}</span>
-                  </div>
-                </div>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-3">
+                      <div>
+                        <div className="text-xs text-muted-foreground">STATUS</div>
+                        <div className={`text-sm font-mono status-${project.status}`}>
+                          {project.status.toUpperCase()}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">PRIORITY</div>
+                        <div className={`text-sm font-mono priority-${project.priority}`}>
+                          {project.priority.toUpperCase()}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">START DATE</div>
+                        <div className="text-sm font-mono">{formatDate(project.startDate)}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">END DATE</div>
+                        <div className="text-sm font-mono">{formatDate(project.endDate)}</div>
+                      </div>
+                    </div>
 
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-400 block">Start</span>
-                    <span className="text-white font-mono">{new Date(project.startDate).toLocaleDateString()}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400 block">End</span>
-                    <span className="text-white font-mono">{new Date(project.endDate).toLocaleDateString()}</span>
-                  </div>
-                </div>
+                    <div className="mb-3">
+                      <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                        <span>PROGRESS</span>
+                        <span>{project.progress}%</span>
+                      </div>
+                      <div className="progress-retro h-2">
+                        <div className="progress-fill h-full" style={{ width: `${project.progress}%` }} />
+                      </div>
+                    </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-gray-800">
-                  <div className="flex items-center text-sm text-gray-400">
-                    <Users className="w-4 h-4 mr-1" />
-                    {project.team.length} members
+                    <div className="flex gap-2">
+                      <button onClick={() => onSelectProject(project)} className="btn-terminal flex-1">
+                        VIEW PROJECT
+                      </button>
+                      <button onClick={() => onDeleteProject(project.id)} className="btn-terminal btn-terminal-danger">
+                        DELETE
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center text-sm text-gray-400">
-                    <Calendar className="w-4 h-4 mr-1" />
-                    {project.phases.length} phases
-                  </div>
-                </div>
+                ))}
               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {filteredProjects.length === 0 && (
-        <div className="text-center py-12">
-          <div className="text-gray-500 mb-4">
-            <BarChart3 className="w-12 h-12 mx-auto mb-4" />
-            <p className="text-lg font-mono">NO PROJECTS FOUND</p>
-            <p className="text-sm">Try adjusting your search or filters</p>
+            )}
           </div>
         </div>
-      )}
+
+        {/* Sidebar */}
+        <div className="space-y-6">
+          {/* General To-Do List */}
+          <div className="card-terminal p-6">
+            <h3 className="text-lg font-bold terminal-text mb-4">GENERAL_TODOS</h3>
+
+            {/* Add Todo Form */}
+            <div className="mb-4">
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  placeholder="Add new todo..."
+                  value={newTodo}
+                  onChange={(e) => setNewTodo(e.target.value)}
+                  className="input-terminal flex-1"
+                  onKeyDown={(e) => e.key === "Enter" && addGeneralTodo()}
+                />
+                <select
+                  value={newTodoPriority}
+                  onChange={(e) => setNewTodoPriority(e.target.value as "low" | "medium" | "high")}
+                  className="input-terminal"
+                >
+                  <option value="low">LOW</option>
+                  <option value="medium">MED</option>
+                  <option value="high">HIGH</option>
+                </select>
+              </div>
+              <button onClick={addGeneralTodo} className="btn-terminal w-full">
+                <Plus className="w-4 h-4 inline mr-2" />
+                ADD TODO
+              </button>
+            </div>
+
+            {/* Todo List */}
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {generalTodos.map((todo) => (
+                <div key={todo.id} className="flex items-center gap-3 p-2 border border-border">
+                  <button
+                    onClick={() => toggleGeneralTodo(todo.id)}
+                    className={`w-4 h-4 border border-border flex items-center justify-center text-xs ${
+                      todo.completed ? "bg-primary text-primary-foreground" : ""
+                    }`}
+                  >
+                    {todo.completed ? "✓" : ""}
+                  </button>
+                  <div className="flex-1">
+                    <span className={`text-sm ${todo.completed ? "line-through text-muted-foreground" : "text-white"}`}>
+                      {todo.text}
+                    </span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`text-xs priority-${todo.priority}`}>
+                        {getPrioritySymbol(todo.priority)} {todo.priority.toUpperCase()}
+                      </span>
+                      {todo.dueDate && (
+                        <span className="text-xs text-muted-foreground">{formatDate(todo.dueDate)}</span>
+                      )}
+                    </div>
+                  </div>
+                  <button onClick={() => deleteGeneralTodo(todo.id)} className="text-muted-foreground hover:text-white">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+
+              {generalTodos.length === 0 && (
+                <div className="text-center py-4 text-muted-foreground">
+                  <div className="text-2xl mb-2">○</div>
+                  <div className="text-sm">NO TODOS</div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Recent Activity */}
+          <div className="card-terminal p-6">
+            <h3 className="text-lg font-bold terminal-text mb-4">RECENT_ACTIVITY</h3>
+
+            <div className="space-y-3 max-h-64 overflow-y-auto">
+              {activities.slice(0, 10).map((activity) => (
+                <div key={activity.id} className="flex items-start gap-3 p-2 border border-border">
+                  <div className="w-6 h-6 border border-border flex items-center justify-center text-xs font-mono">
+                    {getActivityIcon(activity.type)}
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm text-white">{activity.message}</div>
+                    <div className="text-xs text-muted-foreground font-mono">{formatTimestamp(activity.timestamp)}</div>
+                  </div>
+                </div>
+              ))}
+
+              {activities.length === 0 && (
+                <div className="text-center py-4 text-muted-foreground">
+                  <div className="text-2xl mb-2">○</div>
+                  <div className="text-sm">NO ACTIVITY</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

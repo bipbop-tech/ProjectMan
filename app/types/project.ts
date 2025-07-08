@@ -1,48 +1,38 @@
-export interface Project {
+export interface PhaseItem {
   id: string
   name: string
-  description: string
-  status: "planning" | "active" | "completed" | "on-hold"
-  priority: "low" | "medium" | "high" | "critical"
-  startDate: string
-  endDate: string
-  progress: number
-  phases: Phase[]
-  team: TeamMember[]
-  budget: number
-  spent: number
-  image?: string
-  todos: Todo[]
+  completed: boolean
 }
 
-export interface Phase {
+export interface DeliverableFile {
   id: string
   name: string
-  description: string
-  status: "pending" | "in-progress" | "completed" | "blocked"
-  startDate: string
-  endDate: string
-  progress: number
-  deliverables: Deliverable[]
-  dependencies: string[]
+  type: string
+  size: number
+  data: string
+}
+
+export interface DeliverableLink {
+  id: string
+  url: string
+  title: string
 }
 
 export interface Deliverable {
   id: string
   name: string
-  description: string
-  status: "pending" | "in-progress" | "completed" | "blocked"
-  dueDate: string
-  assignee: string
-  priority: "low" | "medium" | "high" | "critical"
+  status: "pending" | "in-progress" | "completed"
+  files?: DeliverableFile[]
+  links?: DeliverableLink[]
 }
 
-export interface TeamMember {
+export interface Phase {
   id: string
   name: string
-  role: string
-  email: string
-  avatar?: string
+  status: "planning" | "active" | "hold" | "completed"
+  progress: number
+  items: PhaseItem[]
+  deliverables: Deliverable[]
 }
 
 export interface Todo {
@@ -51,4 +41,36 @@ export interface Todo {
   completed: boolean
   priority: "low" | "medium" | "high"
   dueDate?: string
+}
+
+export interface GeneralTodo {
+  id: string
+  text: string
+  completed: boolean
+  priority: "low" | "medium" | "high"
+  dueDate?: string
+  projectId?: string
+}
+
+export interface Activity {
+  id: string
+  type: "project_created" | "project_updated" | "phase_completed" | "deliverable_completed" | "todo_completed"
+  message: string
+  timestamp: Date
+  projectId?: string
+}
+
+export interface Project {
+  id: string
+  name: string
+  description: string
+  status: "planning" | "active" | "hold" | "completed"
+  priority: "low" | "medium" | "high"
+  progress: number
+  startDate: Date | string
+  endDate: Date | string
+  image?: string
+  phases: Phase[]
+  deliverables: Deliverable[]
+  todos: Todo[]
 }
