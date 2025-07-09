@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "Project Atlas - Terminal Management System",
-  description: "Advanced project management with terminal aesthetics",
+  description: "A terminal-style project management application",
     generator: 'v0.dev'
 }
 

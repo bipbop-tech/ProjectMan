@@ -14,6 +14,8 @@ import {
   FileText,
   ImageIcon,
   File,
+  Check,
+  Edit,
 } from "lucide-react"
 import type { Project, Phase, Deliverable, PhaseItem } from "../types/project"
 
@@ -26,11 +28,14 @@ interface ProjectDetailProps {
 export function ProjectDetail({ project, onUpdateProject, onBack }: ProjectDetailProps) {
   const [editingPhase, setEditingPhase] = useState<string | null>(null)
   const [editingDeliverable, setEditingDeliverable] = useState<string | null>(null)
+  const [editingItem, setEditingItem] = useState<string | null>(null)
+  const [editingProject, setEditingProject] = useState<string | null>(null)
   const [newTodo, setNewTodo] = useState("")
   const [newTodoPriority, setNewTodoPriority] = useState<"low" | "medium" | "high">("medium")
   const [newTaskInputs, setNewTaskInputs] = useState<Record<string, string>>({})
   const [newDeliverableInputs, setNewDeliverableInputs] = useState<Record<string, string>>({})
   const [newPhaseInput, setNewPhaseInput] = useState("")
+  const [editingTexts, setEditingTexts] = useState<Record<string, string>>({})
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -173,6 +178,27 @@ export function ProjectDetail({ project, onUpdateProject, onBack }: ProjectDetai
     onUpdateProject(updatedProject)
   }
 
+  const updatePhaseStatus = (phaseId: string, status: "planning" | "active" | "hold" | "completed") => {
+    const updatedProject = { ...project }
+    const phase = updatedProject.phases.find((p) => p.id === phaseId)
+    if (phase) {
+      phase.status = status
+    }
+    onUpdateProject(updatedProject)
+  }
+
+  const updateProjectStatus = (status: "planning" | "active" | "hold" | "completed") => {
+    const updatedProject = { ...project }
+    updatedProject.status = status
+    onUpdateProject(updatedProject)
+  }
+
+  const updateProjectPriority = (priority: "low" | "medium" | "high") => {
+    const updatedProject = { ...project }
+    updatedProject.priority = priority
+    onUpdateProject(updatedProject)
+  }
+
   const handleFileUpload = (phaseId: string, deliverableId: string, event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
@@ -273,6 +299,68 @@ export function ProjectDetail({ project, onUpdateProject, onBack }: ProjectDetai
     }
   }
 
+  const handleEdit = (id: string, text: string) => {
+    setEditingTexts({ ...editingTexts, [id]: text })
+  }
+
+  const saveEdit = (id: string, type: string, phaseId?: string) => {
+    const updatedProject = { ...project }
+    const newText = editingTexts[id]?.trim()
+
+    if (!newText) return
+
+    if (type === "project") {
+      updatedProject.name = newText
+    } else if (type === "phase" && phaseId) {
+      const phase = updatedProject.phases.find((p) => p.id === phaseId)
+      if (phase) {
+        phase.name = newText
+      }
+    } else if (type === "item" && phaseId) {
+      const phase = updatedProject.phases.find((p) => p.id === phaseId)
+      if (phase) {
+        const item = phase.items.find((i) => i.id === id)
+        if (item) {
+          item.name = newText
+        }
+      }
+    } else if (type === "deliverable" && phaseId) {
+      const phase = updatedProject.phases.find((p) => p.id === phaseId)
+      if (phase) {
+        const deliverable = phase.deliverables.find((d) => d.id === id)
+        if (deliverable) {
+          deliverable.name = newText
+        }
+      }
+    }
+
+    setEditingTexts({})
+    setEditingProject(null)
+    setEditingPhase(null)
+    setEditingItem(null)
+    setEditingDeliverable(null)
+    onUpdateProject(updatedProject)
+  }
+
+  const cancelEdit = () => {
+    setEditingTexts({})
+    setEditingProject(null)
+    setEditingPhase(null)
+    setEditingItem(null)
+    setEditingDeliverable(null)
+  }
+
+  // Safe access with fallbacks
+  const safeProject = {
+    ...project,
+    status: project?.status || "planning",
+    priority: project?.priority || "medium",
+    name: project?.name || "Untitled Project",
+    description: project?.description || "No description",
+    progress: project?.progress || 0,
+    phases: project?.phases || [],
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -280,7 +368,7 @@ export function ProjectDetail({ project, onUpdateProject, onBack }: ProjectDetai
         <button onClick={onBack} className="btn-terminal">
           ← BACK TO DASHBOARD
         </button>
-        <div className="text-sm text-muted-foreground font-mono">PROJECT ID: {project.id}</div>
+        <div className="text-sm text-muted-foreground font-mono">PROJECT ID: {safeProject.id}</div>
       </div>
 
       {/* Project Info */}
@@ -289,22 +377,55 @@ export function ProjectDetail({ project, onUpdateProject, onBack }: ProjectDetai
           <div className="lg:col-span-2 space-y-4">
             <div>
               <label className="text-xs text-muted-foreground block mb-1">PROJECT NAME</label>
-              <div className="text-xl font-bold terminal-text">{project.name}</div>
+              {editingProject === safeProject.id ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={editingTexts[safeProject.id] || safeProject.name}
+                    onChange={(e) => handleEdit(safeProject.id, e.target.value)}
+                    className="input-terminal flex-1"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveEdit(safeProject.id, "project")
+                      if (e.key === "Escape") cancelEdit()
+                    }}
+                    autoFocus
+                  />
+                  <button onClick={() => saveEdit(safeProject.id, "project")} className="btn-terminal px-2">
+                    <Check className="w-4 h-4" />
+                  </button>
+                  <button onClick={cancelEdit} className="btn-terminal px-2">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="text-xl font-bold terminal-text">{safeProject.name}</div>
+                  <button
+                    onClick={() => {
+                      setEditingProject(safeProject.id)
+                      handleEdit(safeProject.id, safeProject.name)
+                    }}
+                    className="text-muted-foreground hover:text-white"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
 
             <div>
               <label className="text-xs text-muted-foreground block mb-1">DESCRIPTION</label>
-              <div className="text-muted-foreground">{project.description}</div>
+              <div className="text-muted-foreground">{safeProject.description}</div>
             </div>
           </div>
 
           <div className="space-y-4">
-            {project.image && (
+            {safeProject.image && (
               <div>
                 <label className="text-xs text-muted-foreground block mb-1">PROJECT IMAGE</label>
                 <img
-                  src={project.image || "/placeholder.svg"}
-                  alt={project.name}
+                  src={safeProject.image || "/placeholder.svg"}
+                  alt={safeProject.name}
                   className="w-full h-32 object-cover border border-border"
                 />
               </div>
@@ -313,31 +434,45 @@ export function ProjectDetail({ project, onUpdateProject, onBack }: ProjectDetai
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-xs text-muted-foreground block mb-1">STATUS</label>
-                <div className={`status-${project.status} flex items-center gap-2`}>
-                  <span>{getStatusSymbol(project.status)}</span>
-                  <span>{project.status.toUpperCase()}</span>
-                </div>
+                <select
+                  value={safeProject.status}
+                  onChange={(e) => updateProjectStatus(e.target.value as any)}
+                  className="input-terminal w-full"
+                >
+                  <option value="planning">Planning</option>
+                  <option value="active">Active</option>
+                  <option value="hold">Hold</option>
+                  <option value="completed">Completed</option>
+                </select>
               </div>
 
               <div>
                 <label className="text-xs text-muted-foreground block mb-1">PRIORITY</label>
-                <div className={`priority-${project.priority}`}>{project.priority.toUpperCase()}</div>
+                <select
+                  value={safeProject.priority}
+                  onChange={(e) => updateProjectPriority(e.target.value as any)}
+                  className="input-terminal w-full"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
               </div>
             </div>
 
             <div>
               <label className="text-xs text-muted-foreground block mb-1">TIMELINE</label>
               <div className="text-sm">
-                <div>START: {formatDate(project.startDate)}</div>
-                <div>END: {formatDate(project.endDate)}</div>
+                <div>START: {formatDate(safeProject.startDate)}</div>
+                <div>END: {formatDate(safeProject.endDate)}</div>
               </div>
             </div>
 
             <div>
               <label className="text-xs text-muted-foreground block mb-1">OVERALL PROGRESS</label>
-              <div className="text-2xl font-bold terminal-text mb-2">{project.progress}%</div>
+              <div className="text-2xl font-bold terminal-text mb-2">{safeProject.progress}%</div>
               <div className="progress-retro h-3">
-                <div className="progress-fill h-full" style={{ width: `${project.progress}%` }} />
+                <div className="progress-fill h-full" style={{ width: `${safeProject.progress}%` }} />
               </div>
             </div>
           </div>
@@ -367,194 +502,344 @@ export function ProjectDetail({ project, onUpdateProject, onBack }: ProjectDetai
       <div className="card-terminal p-6">
         <h2 className="text-xl font-bold terminal-text mb-4">PROJECT_PHASES</h2>
         <div className="space-y-6">
-          {project.phases.map((phase) => (
-            <div key={phase.id} className="border border-border p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold terminal-text">{phase.name}</h3>
-                <div className="flex items-center gap-4">
-                  <span className={`status-symbol status-${phase.status}`}>{getStatusSymbol(phase.status)}</span>
-                  <span className="text-sm font-mono">{phase.progress}%</span>
-                </div>
-              </div>
+          {safeProject.phases.map((phase) => {
+            const safePhase = {
+              ...phase,
+              status: phase?.status || "planning",
+              name: phase?.name || "Untitled Phase",
+              progress: phase?.progress || 0,
+              items: phase?.items || [],
+              deliverables: phase?.deliverables || [],
+            }
 
-              <div className="progress-retro h-2 mb-4">
-                <div className="progress-fill h-full" style={{ width: `${phase.progress}%` }} />
-              </div>
-
-              {/* Phase Content - Side by Side */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Things to Do */}
-                <div>
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-6 h-6 bg-white text-black flex items-center justify-center text-xs font-bold">
-                      ✓
+            return (
+              <div key={safePhase.id} className="border border-border p-4">
+                <div className="flex items-center justify-between mb-4">
+                  {editingPhase === safePhase.id ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={editingTexts[safePhase.id] || safePhase.name}
+                        onChange={(e) => handleEdit(safePhase.id, e.target.value)}
+                        className="input-terminal flex-1"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveEdit(safePhase.id, "phase", safePhase.id)
+                          if (e.key === "Escape") cancelEdit()
+                        }}
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => saveEdit(safePhase.id, "phase", safePhase.id)}
+                        className="btn-terminal px-2"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button onClick={cancelEdit} className="btn-terminal px-2">
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
-                    <span className="font-semibold">Things to Do</span>
-                  </div>
-
-                  <div className="space-y-2 mb-4">
-                    {phase.items.map((item) => (
-                      <div key={item.id} className="flex items-center gap-3">
-                        <button
-                          onClick={() => togglePhaseItem(phase.id, item.id)}
-                          className={`w-4 h-4 border border-border flex items-center justify-center text-xs ${
-                            item.completed ? "bg-primary text-primary-foreground" : ""
-                          }`}
-                        >
-                          {item.completed ? "✓" : ""}
-                        </button>
-                        <span className={`text-sm ${item.completed ? "line-through text-muted-foreground" : ""}`}>
-                          {item.name}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Add new task..."
-                      value={newTaskInputs[phase.id] || ""}
-                      onChange={(e) => setNewTaskInputs({ ...newTaskInputs, [phase.id]: e.target.value })}
-                      className="input-terminal flex-1"
-                      onKeyDown={(e) => e.key === "Enter" && addPhaseItem(phase.id)}
-                    />
-                    <button
-                      onClick={() => addPhaseItem(phase.id)}
-                      className="w-8 h-8 bg-foreground text-background flex items-center justify-center hover:bg-primary"
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-bold terminal-text">{safePhase.name}</h3>
+                      <button
+                        onClick={() => {
+                          setEditingPhase(safePhase.id)
+                          handleEdit(safePhase.id, safePhase.name)
+                        }}
+                        className="text-muted-foreground hover:text-white"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-4">
+                    <select
+                      value={safePhase.status}
+                      onChange={(e) => updatePhaseStatus(safePhase.id, e.target.value as any)}
+                      className="input-terminal text-xs px-2 py-1"
                     >
-                      <Plus className="w-4 h-4" />
-                    </button>
+                      <option value="planning">Planning</option>
+                      <option value="active">Active</option>
+                      <option value="hold">Hold</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                    <span className="text-sm font-mono">{safePhase.progress}%</span>
                   </div>
                 </div>
 
-                {/* Deliverables */}
-                <div>
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-6 h-6 border border-white flex items-center justify-center text-xs">📦</div>
-                    <span className="font-semibold">Deliverables</span>
-                  </div>
+                <div className="progress-retro h-2 mb-4">
+                  <div className="progress-fill h-full" style={{ width: `${safePhase.progress}%` }} />
+                </div>
 
-                  <div className="space-y-3 mb-4">
-                    {phase.deliverables.map((deliverable) => (
-                      <div key={deliverable.id} className="border border-border p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-medium">{deliverable.name}</span>
-                          <div className="flex items-center gap-2">
-                            <select
-                              value={deliverable.status}
-                              onChange={(e) => updateDeliverableStatus(phase.id, deliverable.id, e.target.value as any)}
-                              className="input-terminal text-xs px-2 py-1"
+                {/* Phase Content - Side by Side */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Things to Do */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="checkbox-terminal">✓</div>
+                      <span className="font-semibold">Things to Do</span>
+                    </div>
+
+                    <div className="space-y-2 mb-4">
+                      {safePhase.items.map((item) => {
+                        const safeItem = {
+                          ...item,
+                          name: item?.name || "Untitled Task",
+                          completed: item?.completed || false,
+                        }
+
+                        return (
+                          <div key={safeItem.id} className="flex items-center gap-3">
+                            <button
+                              onClick={() => togglePhaseItem(safePhase.id, safeItem.id)}
+                              className={`checkbox-terminal ${safeItem.completed ? "bg-primary text-primary-foreground" : ""}`}
                             >
-                              <option value="pending">Pending</option>
-                              <option value="in-progress">In Progress</option>
-                              <option value="completed">Completed</option>
-                            </select>
+                              {safeItem.completed ? "✓" : ""}
+                            </button>
+                            {editingItem === safeItem.id ? (
+                              <div className="flex items-center gap-2 flex-1">
+                                <input
+                                  type="text"
+                                  value={editingTexts[safeItem.id] || safeItem.name}
+                                  onChange={(e) => handleEdit(safeItem.id, e.target.value)}
+                                  className="input-terminal flex-1"
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") saveEdit(safeItem.id, "item", safePhase.id)
+                                    if (e.key === "Escape") cancelEdit()
+                                  }}
+                                  autoFocus
+                                />
+                                <button
+                                  onClick={() => saveEdit(safeItem.id, "item", safePhase.id)}
+                                  className="btn-terminal px-2"
+                                >
+                                  <Check className="w-4 h-4" />
+                                </button>
+                                <button onClick={cancelEdit} className="btn-terminal px-2">
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 flex-1">
+                                <span
+                                  className={`text-sm ${safeItem.completed ? "line-through text-muted-foreground" : ""}`}
+                                >
+                                  {safeItem.name}
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    setEditingItem(safeItem.id)
+                                    handleEdit(safeItem.id, safeItem.name)
+                                  }}
+                                  className="text-muted-foreground hover:text-white"
+                                >
+                                  <Edit className="w-3 h-3" />
+                                </button>
+                              </div>
+                            )}
                           </div>
-                        </div>
+                        )
+                      })}
+                    </div>
 
-                        {/* Files */}
-                        {deliverable.files && deliverable.files.length > 0 && (
-                          <div className="mb-2">
-                            <div className="text-xs text-muted-foreground mb-1">FILES:</div>
-                            <div className="space-y-1">
-                              {deliverable.files.map((file) => (
-                                <div key={file.id} className="flex items-center justify-between text-xs">
-                                  <div className="flex items-center gap-2">
-                                    {getFileIcon(file.type)}
-                                    <span>{file.name}</span>
-                                    <span className="text-muted-foreground">({Math.round(file.size / 1024)}KB)</span>
-                                  </div>
-                                  <button
-                                    onClick={() => removeFile(phase.id, deliverable.id, file.id)}
-                                    className="text-muted-foreground hover:text-white"
-                                  >
-                                    <X className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Links */}
-                        {deliverable.links && deliverable.links.length > 0 && (
-                          <div className="mb-2">
-                            <div className="text-xs text-muted-foreground mb-1">LINKS:</div>
-                            <div className="space-y-1">
-                              {deliverable.links.map((link) => (
-                                <div key={link.id} className="flex items-center justify-between text-xs">
-                                  <div className="flex items-center gap-2">
-                                    <Link className="w-3 h-3" />
-                                    <a
-                                      href={link.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-white hover:underline"
-                                    >
-                                      {link.title}
-                                    </a>
-                                  </div>
-                                  <button
-                                    onClick={() => removeLink(phase.id, deliverable.id, link.id)}
-                                    className="text-muted-foreground hover:text-white"
-                                  >
-                                    <X className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Upload Actions */}
-                        <div className="flex gap-2 mt-2">
-                          <label className="btn-terminal text-xs px-2 py-1 cursor-pointer">
-                            <Upload className="w-3 h-3 inline mr-1" />
-                            FILE
-                            <input
-                              type="file"
-                              className="hidden"
-                              onChange={(e) => handleFileUpload(phase.id, deliverable.id, e)}
-                              accept="image/*,.pdf,.doc,.docx,.ppt,.pptx"
-                            />
-                          </label>
-                          <button
-                            onClick={() => {
-                              const url = prompt("Enter URL:")
-                              const title = prompt("Enter title (optional):")
-                              if (url) addLink(phase.id, deliverable.id, url, title || "")
-                            }}
-                            className="btn-terminal text-xs px-2 py-1"
-                          >
-                            <Link className="w-3 h-3 inline mr-1" />
-                            LINK
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Add new task..."
+                        value={newTaskInputs[safePhase.id] || ""}
+                        onChange={(e) => setNewTaskInputs({ ...newTaskInputs, [safePhase.id]: e.target.value })}
+                        className="input-terminal flex-1"
+                        onKeyDown={(e) => e.key === "Enter" && addPhaseItem(safePhase.id)}
+                      />
+                      <button
+                        onClick={() => addPhaseItem(safePhase.id)}
+                        className="w-8 h-8 bg-foreground text-background flex items-center justify-center hover:bg-primary"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Add deliverable..."
-                      value={newDeliverableInputs[phase.id] || ""}
-                      onChange={(e) => setNewDeliverableInputs({ ...newDeliverableInputs, [phase.id]: e.target.value })}
-                      className="input-terminal flex-1"
-                      onKeyDown={(e) => e.key === "Enter" && addPhaseDeliverable(phase.id)}
-                    />
-                    <button
-                      onClick={() => addPhaseDeliverable(phase.id)}
-                      className="w-8 h-8 bg-foreground text-background flex items-center justify-center hover:bg-primary"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
+                  {/* Deliverables */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="w-6 h-6 border border-white flex items-center justify-center text-xs">📦</div>
+                      <span className="font-semibold">Deliverables</span>
+                    </div>
+
+                    <div className="space-y-3 mb-4">
+                      {safePhase.deliverables.map((deliverable) => {
+                        const safeDeliverable = {
+                          ...deliverable,
+                          name: deliverable?.name || "Untitled Deliverable",
+                          status: deliverable?.status || "pending",
+                          files: deliverable?.files || [],
+                          links: deliverable?.links || [],
+                        }
+
+                        return (
+                          <div key={safeDeliverable.id} className="border border-border p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              {editingDeliverable === safeDeliverable.id ? (
+                                <div className="flex items-center gap-2 flex-1">
+                                  <input
+                                    type="text"
+                                    value={editingTexts[safeDeliverable.id] || safeDeliverable.name}
+                                    onChange={(e) => handleEdit(safeDeliverable.id, e.target.value)}
+                                    className="input-terminal flex-1"
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") saveEdit(safeDeliverable.id, "deliverable", safePhase.id)
+                                      if (e.key === "Escape") cancelEdit()
+                                    }}
+                                    autoFocus
+                                  />
+                                  <button
+                                    onClick={() => saveEdit(safeDeliverable.id, "deliverable", safePhase.id)}
+                                    className="btn-terminal px-2"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </button>
+                                  <button onClick={cancelEdit} className="btn-terminal px-2">
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">{safeDeliverable.name}</span>
+                                  <button
+                                    onClick={() => {
+                                      setEditingDeliverable(safeDeliverable.id)
+                                      handleEdit(safeDeliverable.id, safeDeliverable.name)
+                                    }}
+                                    className="text-muted-foreground hover:text-white"
+                                  >
+                                    <Edit className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )}
+                              <div className="flex items-center gap-2">
+                                <select
+                                  value={safeDeliverable.status}
+                                  onChange={(e) =>
+                                    updateDeliverableStatus(safePhase.id, safeDeliverable.id, e.target.value as any)
+                                  }
+                                  className="input-terminal text-xs px-2 py-1"
+                                >
+                                  <option value="pending">Pending</option>
+                                  <option value="in-progress">In Progress</option>
+                                  <option value="completed">Completed</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            {/* Files */}
+                            {safeDeliverable.files && safeDeliverable.files.length > 0 && (
+                              <div className="mb-2">
+                                <div className="text-xs text-muted-foreground mb-1">FILES:</div>
+                                <div className="space-y-1">
+                                  {safeDeliverable.files.map((file) => (
+                                    <div key={file.id} className="flex items-center justify-between text-xs">
+                                      <div className="flex items-center gap-2">
+                                        {getFileIcon(file.type)}
+                                        <span>{file.name}</span>
+                                        <span className="text-muted-foreground">
+                                          ({Math.round(file.size / 1024)}KB)
+                                        </span>
+                                      </div>
+                                      <button
+                                        onClick={() => removeFile(safePhase.id, safeDeliverable.id, file.id)}
+                                        className="text-muted-foreground hover:text-white"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Links */}
+                            {safeDeliverable.links && safeDeliverable.links.length > 0 && (
+                              <div className="mb-2">
+                                <div className="text-xs text-muted-foreground mb-1">LINKS:</div>
+                                <div className="space-y-1">
+                                  {safeDeliverable.links.map((link) => (
+                                    <div key={link.id} className="flex items-center justify-between text-xs">
+                                      <div className="flex items-center gap-2">
+                                        <Link className="w-3 h-3" />
+                                        <a
+                                          href={link.url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-white hover:underline"
+                                        >
+                                          {link.title}
+                                        </a>
+                                      </div>
+                                      <button
+                                        onClick={() => removeLink(safePhase.id, safeDeliverable.id, link.id)}
+                                        className="text-muted-foreground hover:text-white"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Upload Actions */}
+                            <div className="flex gap-2 mt-2">
+                              <label className="btn-terminal text-xs px-2 py-1 cursor-pointer">
+                                <Upload className="w-3 h-3 inline mr-1" />
+                                FILE
+                                <input
+                                  type="file"
+                                  className="hidden"
+                                  onChange={(e) => handleFileUpload(safePhase.id, safeDeliverable.id, e)}
+                                  accept="image/*,.pdf,.doc,.docx,.ppt,.pptx"
+                                />
+                              </label>
+                              <button
+                                onClick={() => {
+                                  const url = prompt("Enter URL:")
+                                  const title = prompt("Enter title (optional):")
+                                  if (url) addLink(safePhase.id, safeDeliverable.id, url, title || "")
+                                }}
+                                className="btn-terminal text-xs px-2 py-1"
+                              >
+                                <Link className="w-3 h-3 inline mr-1" />
+                                LINK
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Add deliverable..."
+                        value={newDeliverableInputs[safePhase.id] || ""}
+                        onChange={(e) =>
+                          setNewDeliverableInputs({ ...newDeliverableInputs, [safePhase.id]: e.target.value })
+                        }
+                        className="input-terminal flex-1"
+                        onKeyDown={(e) => e.key === "Enter" && addPhaseDeliverable(safePhase.id)}
+                      />
+                      <button
+                        onClick={() => addPhaseDeliverable(safePhase.id)}
+                        className="w-8 h-8 bg-foreground text-background flex items-center justify-center hover:bg-primary"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>

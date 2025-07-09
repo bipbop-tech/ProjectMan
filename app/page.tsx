@@ -1,78 +1,132 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { ProjectDashboard } from "./components/project-dashboard"
 import { ProjectCreation } from "./components/project-creation"
 import { ProjectDetail } from "./components/project-detail"
+import { projectService, generalTodoService, activityService } from "../lib/supabase"
 import type { Project, GeneralTodo, Activity } from "./types/project"
 
 export default function Home() {
   const [currentView, setCurrentView] = useState<"dashboard" | "create" | "detail">("dashboard")
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
-  const [generalTodos, setGeneralTodos] = useState<GeneralTodo[]>([
-    {
-      id: "1",
-      text: "Review quarterly project reports",
-      completed: false,
-      priority: "high",
-      dueDate: "2024-01-25",
-    },
-    {
-      id: "2",
-      text: "Update project management documentation",
-      completed: false,
-      priority: "medium",
-    },
-    {
-      id: "3",
-      text: "Schedule team retrospective meeting",
-      completed: true,
-      priority: "low",
-    },
-  ])
-  const [activities, setActivities] = useState<Activity[]>([
-    {
-      id: "1",
-      type: "project_created",
-      message: "New project 'E-Commerce Platform' created",
-      timestamp: new Date("2024-01-15T10:30:00"),
-      projectId: "1",
-    },
-    {
-      id: "2",
-      type: "phase_completed",
-      message: "Planning phase completed for E-Commerce Platform",
-      timestamp: new Date("2024-01-14T15:45:00"),
-      projectId: "1",
-    },
-    {
-      id: "3",
-      type: "deliverable_completed",
-      message: "Wireframes deliverable completed",
-      timestamp: new Date("2024-01-13T09:20:00"),
-      projectId: "1",
-    },
-  ])
+  const [generalTodos, setGeneralTodos] = useState<GeneralTodo[]>([])
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const handleCreateProject = (projectData: Omit<Project, "id">) => {
-    const newProject: Project = {
-      ...projectData,
-      id: Date.now().toString(),
+  // Load data from Supabase
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      const [projectsData, todosData, activitiesData] = await Promise.all([
+        projectService.getAll(),
+        generalTodoService.getAll(),
+        activityService.getAll(),
+      ])
+
+      // Transform database data to app format
+      const transformedProjects = projectsData.map((p) => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        status: p.status as any,
+        priority: p.priority as any,
+        progress: p.progress,
+        startDate: p.start_date,
+        endDate: p.end_date,
+        image: p.image,
+        phases: p.phases || [],
+        deliverables: p.deliverables || [],
+        todos: p.todos || [],
+      }))
+
+      const transformedTodos = todosData.map((t) => ({
+        id: t.id,
+        text: t.text,
+        completed: t.completed,
+        priority: t.priority as any,
+        dueDate: t.due_date,
+        projectId: t.project_id,
+      }))
+
+      const transformedActivities = activitiesData.map((a) => ({
+        id: a.id,
+        type: a.type as any,
+        message: a.message,
+        timestamp: new Date(a.timestamp),
+        projectId: a.project_id,
+      }))
+
+      setProjects(transformedProjects)
+      setGeneralTodos(transformedTodos)
+      setActivities(transformedActivities)
+    } catch (error) {
+      console.error("Error loading data:", error)
+    } finally {
+      setLoading(false)
     }
-    setProjects([...projects, newProject])
+  }
 
-    // Add activity
-    const newActivity: Activity = {
-      id: Date.now().toString(),
-      type: "project_created",
-      message: `New project '${newProject.name}' created`,
-      timestamp: new Date(),
-      projectId: newProject.id,
+  const handleCreateProject = async (projectData: Omit<Project, "id">) => {
+    try {
+      const dbProject = {
+        name: projectData.name,
+        description: projectData.description,
+        status: projectData.status,
+        priority: projectData.priority,
+        progress: projectData.progress,
+        start_date:
+          typeof projectData.startDate === "string"
+            ? projectData.startDate
+            : projectData.startDate.toISOString().split("T")[0],
+        end_date:
+          typeof projectData.endDate === "string"
+            ? projectData.endDate
+            : projectData.endDate.toISOString().split("T")[0],
+        image: projectData.image,
+        phases: projectData.phases,
+        deliverables: projectData.deliverables,
+        todos: projectData.todos,
+      }
+
+      const createdProject = await projectService.create(dbProject)
+
+      // Add to local state
+      const newProject: Project = {
+        id: createdProject.id,
+        name: createdProject.name,
+        description: createdProject.description,
+        status: createdProject.status as any,
+        priority: createdProject.priority as any,
+        progress: createdProject.progress,
+        startDate: createdProject.start_date,
+        endDate: createdProject.end_date,
+        image: createdProject.image,
+        phases: createdProject.phases || [],
+        deliverables: createdProject.deliverables || [],
+        todos: createdProject.todos || [],
+      }
+
+      setProjects([newProject, ...projects])
+
+      // Add activity
+      await activityService.create({
+        type: "project_created",
+        message: `New project '${newProject.name}' created`,
+        timestamp: new Date().toISOString(),
+        project_id: newProject.id,
+      })
+
+      await loadData() // Refresh data
+      setCurrentView("dashboard")
+    } catch (error) {
+      console.error("Error creating project:", error)
     }
-    setActivities([newActivity, ...activities])
-
-    setCurrentView("dashboard")
   }
 
   const handleSelectProject = (project: Project) => {
@@ -80,28 +134,71 @@ export default function Home() {
     setCurrentView("detail")
   }
 
-  const handleUpdateProject = (updatedProject: Project) => {
-    setProjects(projects.map((p) => (p.id === updatedProject.id ? updatedProject : p)))
-    setSelectedProject(updatedProject)
+  const handleUpdateProject = async (updatedProject: Project) => {
+    try {
+      const dbProject = {
+        name: updatedProject.name,
+        description: updatedProject.description,
+        status: updatedProject.status,
+        priority: updatedProject.priority,
+        progress: updatedProject.progress,
+        start_date:
+          typeof updatedProject.startDate === "string"
+            ? updatedProject.startDate
+            : updatedProject.startDate.toISOString().split("T")[0],
+        end_date:
+          typeof updatedProject.endDate === "string"
+            ? updatedProject.endDate
+            : updatedProject.endDate.toISOString().split("T")[0],
+        image: updatedProject.image,
+        phases: updatedProject.phases,
+        deliverables: updatedProject.deliverables,
+        todos: updatedProject.todos,
+      }
 
-    // Add activity for project updates
-    const newActivity: Activity = {
-      id: Date.now().toString(),
-      type: "project_updated",
-      message: `Project '${updatedProject.name}' updated`,
-      timestamp: new Date(),
-      projectId: updatedProject.id,
+      await projectService.update(updatedProject.id, dbProject)
+
+      setProjects(projects.map((p) => (p.id === updatedProject.id ? updatedProject : p)))
+      setSelectedProject(updatedProject)
+
+      // Add activity
+      await activityService.create({
+        type: "project_updated",
+        message: `Project '${updatedProject.name}' updated`,
+        timestamp: new Date().toISOString(),
+        project_id: updatedProject.id,
+      })
+
+      await loadData() // Refresh data
+    } catch (error) {
+      console.error("Error updating project:", error)
     }
-    setActivities([newActivity, ...activities])
   }
 
-  const handleDeleteProject = (projectId: string) => {
-    setProjects(projects.filter((p) => p.id !== projectId))
-    setCurrentView("dashboard")
+  const handleDeleteProject = async (projectId: string) => {
+    try {
+      await projectService.delete(projectId)
+      setProjects(projects.filter((p) => p.id !== projectId))
+      setCurrentView("dashboard")
+    } catch (error) {
+      console.error("Error deleting project:", error)
+    }
   }
 
-  const handleUpdateGeneralTodos = (updatedTodos: GeneralTodo[]) => {
+  const handleUpdateGeneralTodos = async (updatedTodos: GeneralTodo[]) => {
     setGeneralTodos(updatedTodos)
+    // Note: Individual todo operations should be handled in the component
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-2xl font-mono mb-4">LOADING...</div>
+          <div className="text-sm text-gray-400">Initializing Project Atlas</div>
+        </div>
+      </div>
+    )
   }
 
   return (

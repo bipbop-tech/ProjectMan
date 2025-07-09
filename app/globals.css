@@ -6,24 +6,29 @@
   :root {
     --background: 0 0% 0%;
     --foreground: 0 0% 100%;
-    --card: 0 0% 0%;
+    --card: 0 0% 5%;
     --card-foreground: 0 0% 100%;
-    --popover: 0 0% 0%;
+    --popover: 0 0% 5%;
     --popover-foreground: 0 0% 100%;
     --primary: 0 0% 100%;
     --primary-foreground: 0 0% 0%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 0 0% 15%;
+    --accent-foreground: 0 0% 100%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 27.1%;
-    --input: 0 0% 27.1%;
+    --border: 0 0% 20%;
+    --input: 0 0% 15%;
     --ring: 0 0% 83.1%;
-    --radius: 0rem;
+    --radius: 0.5rem;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
   }
 }
 
@@ -39,90 +44,7 @@
 
 /* Terminal-style components */
 .terminal-text {
-  font-family: "Courier New", monospace;
-  color: white;
-}
-
-.card-terminal {
-  background: black;
-  border: 1px solid #404040;
-  color: white;
-  font-family: "Courier New", monospace;
-}
-
-.btn-terminal {
-  background: black;
-  border: 1px solid #404040;
-  color: white;
-  font-family: "Courier New", monospace;
-  padding: 8px 16px;
-  transition: all 0.2s;
-}
-
-.btn-terminal:hover {
-  background: white;
-  color: black;
-}
-
-.btn-terminal-danger {
-  border-color: #666;
-  color: #ccc;
-}
-
-.btn-terminal-danger:hover {
-  background: #333;
-  color: white;
-}
-
-.input-terminal {
-  background: black;
-  border: 1px solid #404040;
-  color: white;
-  font-family: "Courier New", monospace;
-  padding: 8px 12px;
-}
-
-.input-terminal:focus {
-  border-color: white;
-  outline: none;
-}
-
-.progress-retro {
-  background: #333;
-  border: 1px solid #404040;
-}
-
-.progress-fill {
-  background: white;
-  transition: width 0.3s ease;
-}
-
-.status-planning {
-  color: #888;
-}
-.status-active {
-  color: white;
-}
-.status-hold {
-  color: #666;
-}
-.status-completed {
-  color: white;
-}
-
-.priority-low {
-  color: #666;
-}
-.priority-medium {
-  color: #aaa;
-}
-.priority-high {
-  color: white;
-}
-
-.status-symbol {
-  font-family: "Courier New", monospace;
-  font-weight: bold;
+  @apply text-foreground font-mono;
 }
 
 .cursor-blink {
@@ -138,4 +60,166 @@
   100% {
     opacity: 0;
   }
+}
+
+.card-terminal {
+  @apply bg-card border border-border;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.btn-terminal {
+  @apply bg-foreground text-background px-4 py-2 border border-foreground hover:bg-background hover:text-foreground transition-colors font-mono text-sm;
+}
+
+.btn-terminal-danger {
+  @apply hover:bg-red-900 hover:border-red-500 hover:text-red-100;
+}
+
+.input-terminal {
+  @apply bg-input border border-border px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring font-mono;
+}
+
+.progress-retro {
+  @apply bg-muted border border-border;
+}
+
+.progress-fill {
+  @apply bg-foreground transition-all duration-300;
+  animation: progress-fill 0.5s ease-out;
+}
+
+@keyframes progress-fill {
+  from {
+    width: 0%;
+  }
+}
+
+/* Status indicators */
+.status-planning {
+  @apply text-muted-foreground;
+}
+
+.status-active {
+  @apply text-foreground;
+}
+
+.status-hold {
+  @apply text-yellow-400;
+}
+
+.status-completed {
+  @apply text-green-400;
+}
+
+/* Priority indicators */
+.priority-low {
+  @apply text-muted-foreground;
+}
+
+.priority-medium {
+  @apply text-foreground;
+}
+
+.priority-high {
+  @apply text-red-400;
+}
+
+/* Consistent checkbox styling */
+.checkbox-terminal {
+  @apply w-5 h-5 border border-border flex items-center justify-center text-xs cursor-pointer hover:bg-accent transition-colors;
+}
+
+.checkbox-terminal.checked {
+  @apply bg-white text-black border-white;
+}
+
+.checkbox-terminal:hover {
+  @apply border-gray-300;
+}
+
+/* Editable text styling */
+.editable-text {
+  @apply bg-transparent border-none outline-none text-foreground font-mono;
+}
+
+.editable-text:focus {
+  @apply bg-gray-900 border border-gray-600 px-2 py-1;
+}
+
+.editable-textarea {
+  @apply bg-transparent border-none outline-none text-foreground font-mono resize-none;
+}
+
+.editable-textarea:focus {
+  @apply bg-gray-900 border border-gray-600 px-2 py-1;
+}
+
+.editable-item {
+  @apply cursor-pointer hover:bg-accent transition-colors rounded px-1;
+}
+
+.editable-item:hover::after {
+  content: "✎";
+  @apply text-muted-foreground ml-2;
+}
+
+/* Select styling */
+.select-terminal {
+  @apply bg-black border border-gray-700 text-white font-mono text-sm px-2 py-1;
+}
+
+.select-terminal:focus {
+  @apply outline-none border-gray-500;
+}
+
+/* Activity feed styling */
+.activity-item {
+  @apply border-l-2 border-border pl-4 pb-4 relative;
+}
+
+.activity-item::before {
+  content: "";
+  @apply absolute left-0 top-0 w-2 h-2 bg-foreground transform -translate-x-1/2 rounded-full;
+}
+
+.activity-item:last-child {
+  @apply border-l-0;
+}
+
+/* Todo list styling */
+.todo-item {
+  @apply flex items-center gap-3 p-2 border border-border mb-2 hover:bg-accent transition-colors;
+}
+
+.todo-completed {
+  @apply opacity-60;
+}
+
+.todo-high {
+  @apply border-l-4 border-l-red-400;
+}
+
+.todo-medium {
+  @apply border-l-4 border-l-yellow-400;
+}
+
+.todo-low {
+  @apply border-l-4 border-l-green-400;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-muted;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-border rounded;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-foreground;
 }

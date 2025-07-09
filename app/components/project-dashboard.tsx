@@ -4,7 +4,8 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, X, Clock } from "lucide-react"
+import { Plus, X, Clock, Edit2, Check } from "lucide-react"
+import { generalTodoService } from "../../lib/supabase"
 import type { Project, GeneralTodo, Activity } from "../types/project"
 
 interface ProjectDashboardProps {
@@ -103,6 +104,8 @@ export function ProjectDashboard({
   const [priorityFilter, setPriorityFilter] = useState<string>("all")
   const [newTodo, setNewTodo] = useState("")
   const [newTodoPriority, setNewTodoPriority] = useState<"low" | "medium" | "high">("medium")
+  const [editingTodo, setEditingTodo] = useState<string | null>(null)
+  const [editingTodoText, setEditingTodoText] = useState("")
 
   const filteredProjects = projects.filter((project) => {
     const matchesSearch =
@@ -114,29 +117,82 @@ export function ProjectDashboard({
     return matchesSearch && matchesStatus && matchesPriority
   })
 
-  const addGeneralTodo = () => {
+  const addGeneralTodo = async () => {
     if (newTodo.trim()) {
-      const todo: GeneralTodo = {
-        id: Date.now().toString(),
-        text: newTodo.trim(),
-        completed: false,
-        priority: newTodoPriority,
+      try {
+        const todoData = {
+          text: newTodo.trim(),
+          completed: false,
+          priority: newTodoPriority,
+        }
+
+        const createdTodo = await generalTodoService.create(todoData)
+        const newTodoItem: GeneralTodo = {
+          id: createdTodo.id,
+          text: createdTodo.text,
+          completed: createdTodo.completed,
+          priority: createdTodo.priority as any,
+          dueDate: createdTodo.due_date,
+          projectId: createdTodo.project_id,
+        }
+
+        onUpdateGeneralTodos([newTodoItem, ...generalTodos])
+        setNewTodo("")
+      } catch (error) {
+        console.error("Error adding todo:", error)
       }
-      onUpdateGeneralTodos([...generalTodos, todo])
-      setNewTodo("")
     }
   }
 
-  const toggleGeneralTodo = (todoId: string) => {
-    const updatedTodos = generalTodos.map((todo) =>
-      todo.id === todoId ? { ...todo, completed: !todo.completed } : todo,
-    )
-    onUpdateGeneralTodos(updatedTodos)
+  const toggleGeneralTodo = async (todoId: string) => {
+    try {
+      const todo = generalTodos.find((t) => t.id === todoId)
+      if (todo) {
+        await generalTodoService.update(todoId, { completed: !todo.completed })
+        const updatedTodos = generalTodos.map((todo) =>
+          todo.id === todoId ? { ...todo, completed: !todo.completed } : todo,
+        )
+        onUpdateGeneralTodos(updatedTodos)
+      }
+    } catch (error) {
+      console.error("Error toggling todo:", error)
+    }
   }
 
-  const deleteGeneralTodo = (todoId: string) => {
-    const updatedTodos = generalTodos.filter((todo) => todo.id !== todoId)
-    onUpdateGeneralTodos(updatedTodos)
+  const deleteGeneralTodo = async (todoId: string) => {
+    try {
+      await generalTodoService.delete(todoId)
+      const updatedTodos = generalTodos.filter((todo) => todo.id !== todoId)
+      onUpdateGeneralTodos(updatedTodos)
+    } catch (error) {
+      console.error("Error deleting todo:", error)
+    }
+  }
+
+  const startEditingTodo = (todo: GeneralTodo) => {
+    setEditingTodo(todo.id)
+    setEditingTodoText(todo.text)
+  }
+
+  const saveEditingTodo = async () => {
+    if (editingTodo && editingTodoText.trim()) {
+      try {
+        await generalTodoService.update(editingTodo, { text: editingTodoText.trim() })
+        const updatedTodos = generalTodos.map((todo) =>
+          todo.id === editingTodo ? { ...todo, text: editingTodoText.trim() } : todo,
+        )
+        onUpdateGeneralTodos(updatedTodos)
+        setEditingTodo(null)
+        setEditingTodoText("")
+      } catch (error) {
+        console.error("Error updating todo:", error)
+      }
+    }
+  }
+
+  const cancelEditingTodo = () => {
+    setEditingTodo(null)
+    setEditingTodoText("")
   }
 
   const totalProjects = projects.length
@@ -224,7 +280,6 @@ export function ProjectDashboard({
             <SelectItem value="low">Low</SelectItem>
             <SelectItem value="medium">Medium</SelectItem>
             <SelectItem value="high">High</SelectItem>
-            <SelectItem value="critical">Critical</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -274,13 +329,13 @@ export function ProjectDashboard({
                       <div>
                         <div className="text-xs text-muted-foreground">STATUS</div>
                         <div className={`text-sm font-mono status-${project.status}`}>
-                          {project.status.toUpperCase()}
+                          {project.status?.toUpperCase() || "UNKNOWN"}
                         </div>
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">PRIORITY</div>
                         <div className={`text-sm font-mono priority-${project.priority}`}>
-                          {project.priority.toUpperCase()}
+                          {project.priority?.toUpperCase() || "UNKNOWN"}
                         </div>
                       </div>
                       <div>
@@ -357,19 +412,49 @@ export function ProjectDashboard({
                 <div key={todo.id} className="flex items-center gap-3 p-2 border border-border">
                   <button
                     onClick={() => toggleGeneralTodo(todo.id)}
-                    className={`w-4 h-4 border border-border flex items-center justify-center text-xs ${
-                      todo.completed ? "bg-primary text-primary-foreground" : ""
-                    }`}
+                    className={`checkbox-terminal ${todo.completed ? "checked" : ""}`}
                   >
                     {todo.completed ? "✓" : ""}
                   </button>
                   <div className="flex-1">
-                    <span className={`text-sm ${todo.completed ? "line-through text-muted-foreground" : "text-white"}`}>
-                      {todo.text}
-                    </span>
+                    {editingTodo === todo.id ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={editingTodoText}
+                          onChange={(e) => setEditingTodoText(e.target.value)}
+                          className="editable-text flex-1"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") saveEditingTodo()
+                            if (e.key === "Escape") cancelEditingTodo()
+                          }}
+                          autoFocus
+                        />
+                        <button onClick={saveEditingTodo} className="text-green-400 hover:text-green-300">
+                          <Check className="w-3 h-3" />
+                        </button>
+                        <button onClick={cancelEditingTodo} className="text-red-400 hover:text-red-300">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-sm ${todo.completed ? "line-through text-muted-foreground" : "text-white"}`}
+                        >
+                          {todo.text}
+                        </span>
+                        <button
+                          onClick={() => startEditingTodo(todo)}
+                          className="text-muted-foreground hover:text-white"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 mt-1">
                       <span className={`text-xs priority-${todo.priority}`}>
-                        {getPrioritySymbol(todo.priority)} {todo.priority.toUpperCase()}
+                        {getPrioritySymbol(todo.priority)} {todo.priority?.toUpperCase() || "UNKNOWN"}
                       </span>
                       {todo.dueDate && (
                         <span className="text-xs text-muted-foreground">{formatDate(todo.dueDate)}</span>
